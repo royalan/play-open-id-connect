@@ -1,0 +1,23 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# authorization
+# http://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint
+GET     /oauth2/v1/auth             an.royal.oidc.controllers.AuthController.auth(client_id, response_type, scope, redirect_uri, nonce, state: Option[String], prompt: Option[String], display: Option[String])
+
+# token
+POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.create(code, client_id, redirect_uri, grant_type)
+
+# user
+GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController.getUserInfo
+
+# An example controller showing a sample home page
+GET     /                           controllers.HomeController.index
+# An example controller showing how to use dependency injection
+GET     /count                      controllers.CountController.count
+# An example controller showing how to write asynchronous code
+GET     /message                    controllers.AsyncController.message
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
