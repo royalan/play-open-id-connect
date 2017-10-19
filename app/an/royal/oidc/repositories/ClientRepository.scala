@@ -24,9 +24,6 @@ class ClientRepository @Inject()(@NamedDatabase("openid") protected val dbConfig
 
   private class ClientTable(tag: Tag) extends Table[Client](tag, "client") {
 
-    def * = (id, name, description, clientID, clientSecret, homepageURI, privacyPolicyURI, logoURI, termsOfServiceURI,
-      jwkCertURI, jwkCert, email, redirectURIs, scopes, `type`, createdTime, lastModifiedTime, isDeleted) <> (Client.tupled, Client.unapply)
-
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
 
     def name = column[String]("name")
@@ -62,7 +59,11 @@ class ClientRepository @Inject()(@NamedDatabase("openid") protected val dbConfig
     def lastModifiedTime = column[Long]("last_modified_time")
 
     def isDeleted = column[Boolean]("is_deleted")
+
+    def * = (id, name, description, clientID, clientSecret, homepageURI, privacyPolicyURI, logoURI, termsOfServiceURI,
+      jwkCertURI, jwkCert, email, redirectURIs, scopes, `type`, createdTime, lastModifiedTime, isDeleted) <> (Client.tupled, Client.unapply)
   }
+
 }
 
 case class Client(

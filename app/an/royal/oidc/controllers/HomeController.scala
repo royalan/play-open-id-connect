@@ -1,4 +1,4 @@
-package controllers
+package an.royal.oidc.controllers
 
 import javax.inject._
 
@@ -19,6 +19,10 @@ class HomeController @Inject()(cc: ControllerComponents) extends AbstractControl
    */
   def index = Action {
     Ok(views.html.index("Your new application is ready."))
+  }
+
+  def login = Action {
+    BadRequest("Not yet implemented")
   }
 
 }

@@ -20,16 +20,15 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
   def findByUserID(userID: String): Future[Option[User]] = db.run(users.filter(_.userID === userID).result.headOption)
 
+  def checkUserPassword(email: String, password: String): Future[Boolean] = db.run(users.filter(u => u.email === email && u.password === password).exists.result)
+
   private class UserTable(tag: Tag) extends Table[User](tag, "user") {
-
-    def isDeleted = column[Boolean]("is_deleted")
-
-    def * = (id, userID, name, displayName, givenName, familyName, mobileCountryCode, mobilePhoneNumber,
-      email, emailVerified, avatar, homepageURI, createdTime, lastModifiedTime isDeleted) <> (User.tupled, User.unapply)
 
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
 
     def userID = column[String]("user_id", O.Unique)
+
+    def password = column[String]("password")
 
     def name = column[String]("name", O.Unique)
 
@@ -54,6 +53,11 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
     def createdTime = column[Long]("created_time")
 
     def lastModifiedTime = column[Long]("last_modified_time")
+
+    def isDeleted = column[Boolean]("is_deleted")
+
+    def * = (id, userID, password, name, displayName, givenName, familyName, mobileCountryCode, mobilePhoneNumber,
+      email, emailVerified, avatar, homepageURI, createdTime, lastModifiedTime, isDeleted) <> (User.tupled, User.unapply)
   }
 
 }
@@ -61,6 +65,7 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 case class User(
                  id: Long,
                  userId: String,
+                 password: String,
                  name: String,
                  displayName: String,
                  givenName: String,

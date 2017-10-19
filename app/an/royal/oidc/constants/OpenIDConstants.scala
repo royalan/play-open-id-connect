@@ -4,6 +4,10 @@ package an.royal.oidc.constants
   * Enumeration reference: http://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
   */
 
+object OpenIDConstants {
+  val TOKEN = "token"
+  val SESSION_ID = "sessionID"
+}
 
 
 
