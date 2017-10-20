@@ -29,7 +29,7 @@ import scala.concurrent.{ExecutionContext, Future}
   *                    a blocking API.
   */
 @Singleton
-class AuthController @Inject()(cc: ControllerComponents, actorSystem: ActorSystem, clientRepository: ClientRepository)
+class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerComponents, actorSystem: ActorSystem, clientRepository: ClientRepository)
                               (implicit mat: Materializer, exec: ExecutionContext) extends AbstractController(cc) {
 
   import an.royal.oidc.dtos.HttpBaseResponse._
@@ -58,7 +58,7 @@ class AuthController @Inject()(cc: ControllerComponents, actorSystem: ActorSyste
     * @return Asynchronous response
     */
   def auth(client_id: String, response_type: String, scope: String, redirect_uri: String, nonce: String,
-           state: Option[String], prompt: Option[String], display: Option[String]) = Action.async { req =>
+           state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { req =>
     try {
       // check response type
       val respTypes = response_type.split(" ").map(_.trim).map(OpenIDResponseType.withName).toSet
