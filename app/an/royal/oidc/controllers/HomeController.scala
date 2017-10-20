@@ -17,8 +17,8 @@ class HomeController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
    * will be called when the application receives a `GET` request with
    * a path of `/`.
    */
-  def index = userInfoAction {
-    Ok(views.html.index("Your new application is ready."))
+  def index = Action {
+    Ok(views.html.login())
   }
 
   def login = Action {
