@@ -14,7 +14,9 @@ GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController
 
 GET     /                           an.royal.oidc.controllers.HomeController.index
 
-GET     /login                      an.royal.oidc.controllers.HomeController.login
+GET     /login                      an.royal.oidc.controllers.HomeController.login()
+
+GET     /init                       an.royal.oidc.controllers.HomeController.init
 
 # An example controller showing how to use dependency injection
 GET     /count                      controllers.CountController.count

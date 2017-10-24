@@ -25,28 +25,36 @@ package object controllers {
     override def parser: BodyParser[AnyContent] = playBodyParsers.anyContent
 
     override def invokeBlock[A](request: Request[A], block: (UserRequest[A]) => Future[Result]): Future[Result] = {
+      def authFail = {
+        // FIXME should valid previous request and now we only support GET request. If we want to support POST request, save whole request to cache might be the solution.
+        Future.successful(TemporaryRedirect(routes.HomeController.index().url)
+          .withSession("preReq" -> request.uri))
+      }
+
       val userReq: Option[Future[Result]] = for {
         sessionID <- request.session.get(SESSION_ID)
         tokenCookie <- request.cookies.get(TOKEN)
       } yield {
         // get secret key of token from cache
-        cache.get(sessionID).mapTo[String]
-          .flatMap { key =>
-            try {
-              // trying to decode and valid token by setting signing key.
-              val jwtClaims = Jwts.parser().setSigningKey(key).parseClaimsJws(tokenCookie.value).getBody
-
-              block(new UserRequest[A](Some(jwtClaims.getSubject), request))
-            } catch {
-              case _: SignatureException =>
-                Logger.debug(s"Got invalid token: ${tokenCookie.value}")
-                Future.successful(Results.TemporaryRedirect(routes.HomeController.login().url))
-            }
+        Logger.info(s"Got session ID: $sessionID")
+        cache.get[Array[Byte]](sessionID)
+          .flatMap {
+            case Some(key) =>
+              try {
+                Logger.info(s"key: $key")
+                // trying to decode and valid token by setting signing key.
+                val jwtClaims = Jwts.parser().setSigningKey(key).parseClaimsJws(tokenCookie.value).getBody
+                block(new UserRequest[A](Some(jwtClaims.getSubject), request))
+              } catch {
+                case _: SignatureException => authFail
+              }
+            case _ => authFail
           }
       }
 
-      userReq.getOrElse(Future.successful(Results.TemporaryRedirect(routes.HomeController.login().url)))
+      userReq.getOrElse(authFail)
     }
+
   }
 
 }

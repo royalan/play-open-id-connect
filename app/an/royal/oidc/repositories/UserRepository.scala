@@ -16,11 +16,15 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
   private val users = TableQuery[UserTable]
 
+  def createTable = db.run(DBIO.seq(users.schema.create))
+
   def insert(user: User): Future[Unit] = db.run(users += user).map { _ => () }
 
   def findByUserID(userID: String): Future[Option[User]] = db.run(users.filter(_.userID === userID).result.headOption)
 
-  def checkUserPassword(email: String, password: String): Future[Boolean] = db.run(users.filter(u => u.email === email && u.password === password).exists.result)
+  def checkUserPassword(email: String, password: String): Future[Option[String]] = db.run(users.filter(u => u.email === email && u.password === password).map(_.userID).result.headOption)
+
+  def findByEmailAndPassword(email: String, password: String): Future[Option[User]] = db.run(users.filter(u => u.email === email && u.password === password).result.headOption)
 
   private class UserTable(tag: Tag) extends Table[User](tag, "user") {
 
@@ -34,27 +38,27 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
     def displayName = column[String]("display_name")
 
-    def givenName = column[String]("given_name")
+    def givenName = column[Option[String]]("given_name")
 
-    def familyName = column[String]("family_name")
+    def familyName = column[Option[String]]("family_name")
 
-    def mobileCountryCode = column[String]("mobile_country_code")
+    def mobileCountryCode = column[Option[String]]("mobile_country_code")
 
-    def mobilePhoneNumber = column[String]("mobile_phone_number")
+    def mobilePhoneNumber = column[Option[String]]("mobile_phone_number")
 
     def email = column[String]("email")
 
-    def emailVerified = column[Boolean]("email_verified")
+    def emailVerified = column[Boolean]("email_verified", O.Default(false))
 
-    def avatar = column[String]("avatar")
+    def avatar = column[Option[String]]("avatar")
 
-    def homepageURI = column[String]("homepage_rui")
+    def homepageURI = column[Option[String]]("homepage_rui")
 
     def createdTime = column[Long]("created_time")
 
     def lastModifiedTime = column[Long]("last_modified_time")
 
-    def isDeleted = column[Boolean]("is_deleted")
+    def isDeleted = column[Boolean]("is_deleted", O.Default(false))
 
     def * = (id, userID, password, name, displayName, givenName, familyName, mobileCountryCode, mobilePhoneNumber,
       email, emailVerified, avatar, homepageURI, createdTime, lastModifiedTime, isDeleted) <> (User.tupled, User.unapply)
@@ -68,14 +72,14 @@ case class User(
                  password: String,
                  name: String,
                  displayName: String,
-                 givenName: String,
-                 familyName: String,
-                 mobileCountryCode: String,
-                 mobilePhoneNumber: String,
+                 givenName: Option[String],
+                 familyName: Option[String],
+                 mobileCountryCode: Option[String],
+                 mobilePhoneNumber: Option[String],
                  email: String,
                  emailVerified: Boolean,
-                 avatar: String,
-                 homepageURI: String,
+                 avatar: Option[String],
+                 homepageURI: Option[String],
                  createdTime: Long,
                  lastModifiedTime: Long,
                  isDeleted: Boolean

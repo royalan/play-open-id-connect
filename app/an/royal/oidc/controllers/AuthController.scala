@@ -59,6 +59,8 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
     */
   def auth(client_id: String, response_type: String, scope: String, redirect_uri: String, nonce: String,
            state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { req =>
+
+    // TODO implementation
     try {
       // check response type
       val respTypes = response_type.split(" ").map(_.trim).map(OpenIDResponseType.withName).toSet
@@ -67,10 +69,6 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
       Source.fromFuture(clientRepository.findByClientID(client_id)).map { // check redirect URI and scopes
         _.filter(c => c.redirectURIs.contains(redirect_uri.trim) && scopes.subsetOf(c.scopes.toSet))
       }.runWith(Sink.head)
-
-      // check session for login
-
-
     } catch {
       case e: NoSuchElementException =>
         Logger.debug(s"Got NoSuchElementException, message: ${e.getMessage}")

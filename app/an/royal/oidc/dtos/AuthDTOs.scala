@@ -1,9 +1,6 @@
 package an.royal.oidc.dtos
 
-case class AuthClientResp(
-
-                         )
-
-object AuthDTOs {
-
-}
+case class UserLoginReq(
+                         email: String,
+                         password: String
+                       )

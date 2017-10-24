@@ -4,6 +4,8 @@ version := "1.0-SNAPSHOT"
 
 lazy val root = (project in file(".")).enablePlugins(PlayScala)
 
+TwirlKeys.templateImports += "an.royal.oidc.dtos._"
+
 resolvers += Resolver.sonatypeRepo("snapshots")
 
 scalaVersion := "2.12.3"
