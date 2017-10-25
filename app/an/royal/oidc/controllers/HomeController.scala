@@ -56,15 +56,16 @@ class HomeController @Inject()(encryptionService: EncryptionService, cache: Asyn
           Redirect(req.session.get("preReq").getOrElse("/hello"))
             .withSession(SESSION_ID -> sid)
             .withCookies(
+              // Now we only set user ID to token, we can set any other values like `email`, `avatar` if need.
               Cookie(TOKEN, Jwts.builder().signWith(SignatureAlgorithm.HS256, key).setSubject(userID).compact(), None))
         case None =>
-          BadRequest(views.html.login(loginForm.withError("LOGIN_FAIL", "Login fail, please check your email or password")))
+          // FIXME consider about the password will return to view?
+          BadRequest(views.html.login(loginForm.fill(loginReq).withError("LOGIN_FAIL", "Login fail, please check your email or password")))
       }
     }
 
     val errorFunc = { form: Form[UserLoginReq] =>
       form.errors.foreach(err => Logger.warn(s"${err.key}: ${err.message}"))
-      Logger.debug(s"login request: [${form.data}]")
       Future.successful {
         BadRequest(views.html.login(form))
       }
