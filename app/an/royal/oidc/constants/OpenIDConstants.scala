@@ -41,7 +41,7 @@ object OpenIDDisplay extends Enumeration {
   *   The Authorization Server SHOULD prompt the End-User to select a user account. This enables an End-User who has multiple accounts at the Authorization Server to select amongst the multiple accounts that they might have current sessions for. If it cannot obtain an account selection choice made by the End-User, it MUST return an error, typically account_selection_required.
   */
 object OpenIDPrompt extends Enumeration {
-  type Prompts = Value
+  type Prompt = Value
 
   val NONE = Value("none")
   val LOGIN = Value("login")
@@ -56,4 +56,6 @@ object OpenIDResponseType extends Enumeration {
   val TOKEN = Value("token")
   val ID_TOKEN = Value("id_token")
   val NONE = Value("none")
+
+  def fromName(name: String): Option[Value] = values.find(_.toString == name).orElse(None)
 }

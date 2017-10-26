@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 package object controllers {
 
   class UserRequest[A](
-                        userID: Option[String],
+                        val userID: String,
                         request: Request[A]
                       ) extends WrappedRequest[A](request)
 
@@ -44,7 +44,7 @@ package object controllers {
                 Logger.info(s"key: $key")
                 // trying to decode and valid token by setting signing key.
                 val jwtClaims = Jwts.parser().setSigningKey(key).parseClaimsJws(tokenCookie.value).getBody
-                block(new UserRequest[A](Some(jwtClaims.getSubject), request))
+                block(new UserRequest[A](jwtClaims.getSubject, request))
               } catch {
                 case _: SignatureException => authFail
               }

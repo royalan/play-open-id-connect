@@ -26,7 +26,7 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
   def findByEmailAndPassword(email: String, password: String): Future[Option[User]] = db.run(users.filter(u => u.email === email && u.password === password).result.headOption)
 
-  private class UserTable(tag: Tag) extends Table[User](tag, "user") {
+  private class UserTable(tag: Tag) extends Table[User](tag, "users") {
 
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
 
@@ -68,7 +68,7 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
 case class User(
                  id: Long,
-                 userId: String,
+                 userID: String,
                  password: String,
                  name: String,
                  displayName: String,
