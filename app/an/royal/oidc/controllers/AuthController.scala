@@ -8,14 +8,16 @@ import akka.stream.scaladsl.{Sink, Source}
 import an.royal.oidc.constants.{ErrorCodes, OpenIDDisplay, OpenIDPrompt, OpenIDResponseType}
 import an.royal.oidc.dtos.ClientAuthReq
 import an.royal.oidc.repositories.{ClientRepository, UserConsentRepository}
+import an.royal.oidc.services.ISessionService
 import play.api.mvc._
 
-import scala.concurrent.ExecutionContext
-import scala.util.Try
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 
 @Singleton
-class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerComponents, actorSystem: ActorSystem, clientRepository: ClientRepository, userConsentRepository: UserConsentRepository)
-                              (implicit mat: Materializer, exec: ExecutionContext) extends AbstractController(cc) {
+class AuthController @Inject()(sesssionService: ISessionService, userInfoAction: UserInfoAction, cc: ControllerComponents,
+                               actorSystem: ActorSystem, clientRepository: ClientRepository, userConsentRepository: UserConsentRepository)
+                              (implicit mat: Materializer, ec: ExecutionContext) extends AbstractController(cc) {
 
   import an.royal.oidc.dtos.HttpBaseResponse._
 
@@ -45,6 +47,8 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
   def auth(client_id: String, response_type: String, scope: String, redirect_uri: String, nonce: String,
            state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { req =>
 
+    // TODO check response_type? should we manage it?
+
     Source.fromFuture(clientRepository.findByClientID(client_id)).map {
       case Some(client) =>
         if (client.redirectURIs.contains(redirect_uri.trim)) {
@@ -72,16 +76,31 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
         Left(ErrorCodes.INVALID_CLIENT_ID)
     }.map {
       case Right((validReq, client)) =>
-        userConsentRepository.findByUserIDAndClientID(req.userID, client_id).map{
-          case Some(c) if validReq.scopes.subsetOf(c.scopes.toSet) =>
+        // FIXME don't forget prompt and display
+        userConsentRepository.findByUserIDAndClientID(req.userID, client_id).map {
+          case Some(c) =>
+            validReq.prompt.map {
+              case OpenIDPrompt.NONE =>
+                if (validReq.scopes.subsetOf(c.scopes.toSet))
+                  ???
+                // response token
+                else
+                  errorResponse(BAD_REQUEST, ErrorCodes.ILLEGAL_STATE_OF_PROMPT_VALUE, Some(s"Checked state failed of prompt value [none]"))
+              case OpenIDPrompt.LOGIN =>
+
+              case OpenIDPrompt.CONSENT =>
+              case OpenIDPrompt.SELECT_ACCOUNT =>
+            }
+
+
           // TODO implementation
           // response toke, id_token, code directly
 
-          // should keep response_type, scopes, client_id, redirect_uri... etc. to consent page
-          case _ => Ok(views.html.consent)
+          // should keep response_type, scopes, client_id, redirect_uri, state... etc. to consent page
+          case None => Ok(views.html.consent())
         }
       case Left(err) =>
-        errorResponse(BAD_REQUEST, err, None)
+        errorResponse(BAD_REQUEST, err)
     }
 
 
@@ -90,6 +109,31 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, cc: ControllerCom
       .runWith(Sink.head)
 
 
+  }
+
+  def promptValidation[A](action: Action[A]) = Action.async(action.parser) { request =>
+    import an.royal.oidc.constants.OpenIDConstants._
+    import an.royal.oidc.constants.OpenIDPrompt._
+
+    Try(request.getQueryString("prompt").map(OpenIDPrompt.withName).map {
+      case NONE =>
+        // check session
+        // check scopes
+        sesssionService.checkSession(request.session.get(SESSION_ID), request.cookies.get(TOKEN).map(_.value))
+        Ok
+      case LOGIN =>
+      // redirect to login directly
+        Ok
+      case CONSENT =>
+      // check session, not check scopes
+        Ok
+      case SELECT_ACCOUNT =>
+        errorResponse(BAD_REQUEST, ErrorCodes.NOT_YET_IMPLEMENTED, Some("select_account of prompt value not yep implemented"))
+    }) match {
+      case Success(Some(result)) => Future.successful(result)
+      case Failure(_) => Future.successful(errorResponse(BAD_REQUEST, ErrorCodes.INVALID_PROMPT))
+      case _ => action(request)
+    }
   }
 
 

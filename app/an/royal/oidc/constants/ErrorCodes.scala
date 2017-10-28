@@ -10,6 +10,9 @@ object ErrorCodes extends Enumeration {
   val INVALID_REDIRECT_URI = Value(10005)
   val INVALID_PROMPT = Value(10006)
   val INVALID_DISPLAY = Value(10007)
+  val ILLEGAL_STATE_OF_PROMPT_VALUE = Value(10008)
+  val SESSION_NOT_FOUND = Value(10009)
 
+  val NOT_YET_IMPLEMENTED = Value(99998)
   val UNKNOWN_ERROR = Value(99999)
 }

@@ -12,25 +12,6 @@ object OpenIDConstants {
 
 
 /**
-  * page
-  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a full User Agent page view. If the display parameter is not specified, this is the default display mode.
-  * popup
-  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a popup User Agent window. The popup User Agent window should be of an appropriate size for a login-focused dialog and should not obscure the entire window that it is popping up over.
-  * touch
-  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a device that leverages a touch interface.
-  * wap
-  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a "feature phone" type display.
-  */
-object OpenIDDisplay extends Enumeration {
-  type Display = Value
-
-  val PAGE = Value("page")
-  val POPUP = Value("popup")
-  val TOUCH = Value("touch")
-  val WAP = Value("wap")
-}
-
-/**
   * none
   *   The Authorization Server MUST NOT display any authentication or consent user interface pages. An error is returned if an End-User is not already authenticated or the Client does not have pre-configured consent for the requested Claims or does not fulfill other conditions for processing the request. The error code will typically be login_required, interaction_required, or another code defined in Section 3.1.2.6. This can be used as a method to check for existing authentication and/or consent.
   * login
@@ -47,6 +28,25 @@ object OpenIDPrompt extends Enumeration {
   val LOGIN = Value("login")
   val CONSENT = Value("consent")
   val SELECT_ACCOUNT = Value("select_account")
+}
+
+/**
+  * page
+  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a full User Agent page view. If the display parameter is not specified, this is the default display mode.
+  * popup
+  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a popup User Agent window. The popup User Agent window should be of an appropriate size for a login-focused dialog and should not obscure the entire window that it is popping up over.
+  * touch
+  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a device that leverages a touch interface.
+  * wap
+  *   The Authorization Server SHOULD display the authentication and consent UI consistent with a "feature phone" type display.
+  */
+object OpenIDDisplay extends Enumeration {
+  type Display = Value
+
+  val PAGE = Value("page")
+  val POPUP = Value("popup")
+  val TOUCH = Value("touch")
+  val WAP = Value("wap")
 }
 
 object OpenIDResponseType extends Enumeration {

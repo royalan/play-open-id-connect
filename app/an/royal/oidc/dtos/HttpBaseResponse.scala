@@ -6,7 +6,7 @@ import play.api.mvc.Results
 
 object HttpBaseResponse {
 
-  def errorResponse(status: Int, errCode: ErrorCode, message: Option[String]) = {
+  def errorResponse(status: Int, errCode: ErrorCode, message: Option[String] = None) = {
     Results.Status(status)(Json.toJson(ErrorResponse(ErrorDetail(errCode.id, message.getOrElse(errCode.toString)))))
   }
 
