@@ -16,7 +16,9 @@ class ClientRepository @Inject()(@NamedDatabase("openid") protected val dbConfig
 
   private val clients = TableQuery[ClientTable]
 
-  def insert(client: Client): Future[Unit] = db.run(clients += client).map { _ => () }
+  def createTable: Future[Unit] = db.run(clients.schema.create)
+
+  def insert(client: Client): Future[_] = db.run(clients += client)
 
   def findByClientID(clientID: String): Future[Option[Client]] = db.run(clients.filter(_.clientID === clientID).result.headOption)
 
@@ -54,11 +56,11 @@ class ClientRepository @Inject()(@NamedDatabase("openid") protected val dbConfig
 
     def `type` = column[String]("type")
 
-    def createdTime = column[Long]("created_time")
+    def createdTime = column[Long]("created_time", O.Default(System.currentTimeMillis))
 
-    def lastModifiedTime = column[Long]("last_modified_time")
+    def lastModifiedTime = column[Long]("last_modified_time", O.Default(System.currentTimeMillis))
 
-    def isDeleted = column[Boolean]("is_deleted")
+    def isDeleted = column[Boolean]("is_deleted", O.Default(false))
 
     def * = (id, name, description, clientID, clientSecret, homepageURI, privacyPolicyURI, logoURI, termsOfServiceURI,
       jwkCertURI, jwkCert, email, redirectURIs, scopes, `type`, createdTime, lastModifiedTime, isDeleted) <> (Client.tupled, Client.unapply)

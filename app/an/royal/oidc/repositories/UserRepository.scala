@@ -54,9 +54,9 @@ class UserRepository @Inject()(@NamedDatabase("openid") protected val dbConfigPr
 
     def homepageURI = column[Option[String]]("homepage_rui")
 
-    def createdTime = column[Long]("created_time")
+    def createdTime = column[Long]("created_time", O.Default(System.currentTimeMillis))
 
-    def lastModifiedTime = column[Long]("last_modified_time")
+    def lastModifiedTime = column[Long]("last_modified_time", O.Default(System.currentTimeMillis))
 
     def isDeleted = column[Boolean]("is_deleted", O.Default(false))
 

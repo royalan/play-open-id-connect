@@ -12,16 +12,14 @@ POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.cr
 # user
 GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController.getUserInfo
 
-GET     /                           an.royal.oidc.controllers.HomeController.index
 
-POST     /login                      an.royal.oidc.controllers.HomeController.login()
+# admin
+GET     /init                       an.royal.oidc.controllers.AdminController.init
 
-GET     /init                       an.royal.oidc.controllers.HomeController.init
 
-# An example controller showing how to use dependency injection
-GET     /count                      controllers.CountController.count
-# An example controller showing how to write asynchronous code
-GET     /message                    controllers.AsyncController.message
+GET     /                           an.royal.oidc.controllers.HomeController.landing
+POST    /login                      an.royal.oidc.controllers.LoginController.login
+
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)

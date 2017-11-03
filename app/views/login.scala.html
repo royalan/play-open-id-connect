@@ -1,5 +1,6 @@
 @(form: Form[UserLoginReq])(implicit req: RequestHeader)
 @****************************************************************************************
+
 * implicit request is for CSRF token, check below:                                      *
 * https://www.playframework.com/documentation/2.6.x/ScalaCsrf#using-an-implicit-request *
 ****************************************************************************************@
@@ -24,7 +25,7 @@
 </head>
 <body>
 <div class="container">
-    @helper.form(helper.CSRF(an.royal.oidc.controllers.routes.HomeController.login())) {
+    @helper.form(helper.CSRF(an.royal.oidc.controllers.routes.LoginController.login())) {
         <div class="row">
             <div class="col-md-3"></div>
             <div class="col-md-6">
@@ -82,25 +83,16 @@
             </div>
             }
         </div>
-        <!--
-        <div class="row">
-            <div class="col-md-3"></div>
-            <div class="col-md-6" style="padding-top: .35rem">
-                <div class="form-check mb-2 mr-sm-2 mb-sm-0">
-                    <label class="form-check-label">
-                        <input class="form-check-input" name="remember"
-                               type="checkbox" >
-                        <span style="padding-bottom: .15rem">Remember me</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-        -->
         <div class="row" style="padding-top: 1rem">
             <div class="col-md-3"></div>
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <button type="submit" class="btn btn-success"><i class="fa fa-sign-in"></i> Login</button>
+                @* // TODO *@
                 <a class="btn btn-link" href="/password/reset">Forgot Your Password?</a>
+            </div>
+            <div class="col-md-1" align="right">
+                @* // TODO *@
+                <a class="text-secondary align-middle" href="/login/cancel">Cancel</a>
             </div>
         </div>
     }

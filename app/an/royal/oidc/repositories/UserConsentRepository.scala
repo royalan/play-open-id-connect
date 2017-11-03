@@ -16,9 +16,9 @@ class UserConsentRepository @Inject()(@NamedDatabase("openid") protected val dbC
 
   private val userConsents = TableQuery[UserConsentTable]
 
-  def createTable = db.run(DBIO.seq(userConsents.schema.create))
+  def createTable: Future[Unit] = db.run(DBIO.seq(userConsents.schema.create))
 
-  def insert(consent: UserConsent): Future[Unit] = db.run(userConsents += consent).map { _ => () }
+  def insert(consent: UserConsent): Future[Int] = db.run(userConsents += consent)
 
   def findByUserIDAndClientID(userID: String, clientID: String): Future[Option[UserConsent]] =
     db.run(userConsents.filter(c => c.userID === userID && c.clientID === clientID).result.headOption)
@@ -32,9 +32,9 @@ class UserConsentRepository @Inject()(@NamedDatabase("openid") protected val dbC
 
     def scopes = column[List[String]]("scopes")
 
-    def createdTime = column[Long]("created_time")
+    def createdTime = column[Long]("created_time", O.Default(System.currentTimeMillis))
 
-    def lastModifiedTime = column[Long]("last_modified_time")
+    def lastModifiedTime = column[Long]("last_modified_time", O.Default(System.currentTimeMillis))
 
     def isDeleted = column[Boolean]("is_deleted", O.Default(false))
 

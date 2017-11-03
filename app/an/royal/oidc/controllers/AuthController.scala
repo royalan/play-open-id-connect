@@ -2,21 +2,24 @@ package an.royal.oidc.controllers
 
 import javax.inject._
 
-import akka.actor.ActorSystem
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
+import an.royal.oidc.OpenIDException
+import an.royal.oidc.constants.ErrorCodes.ErrorCode
 import an.royal.oidc.constants.{ErrorCodes, OpenIDDisplay, OpenIDPrompt, OpenIDResponseType}
 import an.royal.oidc.dtos.ClientAuthReq
-import an.royal.oidc.repositories.{ClientRepository, UserConsentRepository}
-import an.royal.oidc.services.ISessionService
+import an.royal.oidc.repositories.{Client, ClientRepository, TokenRepository, UserConsentRepository}
+import an.royal.oidc.services.{SessionService, TokenService}
+import io.jsonwebtoken.Claims
+import play.api.Logger
 import play.api.mvc._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 @Singleton
-class AuthController @Inject()(sesssionService: ISessionService, userInfoAction: UserInfoAction, cc: ControllerComponents,
-                               actorSystem: ActorSystem, clientRepository: ClientRepository, userConsentRepository: UserConsentRepository)
+class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: TokenRepository, clientRepository: ClientRepository, userConsentRepository: UserConsentRepository,
+                               tokenService: TokenService, sessionService: SessionService, cc: ControllerComponents)
                               (implicit mat: Materializer, ec: ExecutionContext) extends AbstractController(cc) {
 
   import an.royal.oidc.dtos.HttpBaseResponse._
@@ -45,63 +48,61 @@ class AuthController @Inject()(sesssionService: ISessionService, userInfoAction:
     * @return Asynchronous response
     */
   def auth(client_id: String, response_type: String, scope: String, redirect_uri: String, nonce: String,
-           state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { req =>
+           state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { implicit req =>
 
-    // TODO check response_type? should we manage it?
+    def validateReq(client: Client) =
+      if (client.redirectURIs.contains(redirect_uri.trim)) {
+        val validParams = for {
+          validTypes <- Try(response_type.split(" +").map(_.toLowerCase).map(OpenIDResponseType.withName).toSet)
+          validScopes <- Try(scope.split(" ").map(_.trim.toLowerCase).toSet).filter(_.subsetOf(client.scopes.toSet))
+          validPrompt <- Try(prompt.map(OpenIDPrompt.withName))
+          validDisplay <- Try(prompt.map(OpenIDDisplay.withName))
+        } yield {
+          ClientAuthReq(client_id, validTypes, validScopes, redirect_uri, nonce, state, validPrompt, validDisplay)
+        }
 
-    Source.fromFuture(clientRepository.findByClientID(client_id)).map {
-      case Some(client) =>
-        if (client.redirectURIs.contains(redirect_uri.trim)) {
-          val validTypes = Try(response_type.split(" ").map(_.trim.toLowerCase).map(OpenIDResponseType.withName).toSet)
-          val validScopes = Try(scope.split(" ").map(_.trim.toLowerCase).toSet).filter(_.subsetOf(client.scopes.toSet))
-          val validPrompt = Try(prompt.map(OpenIDPrompt.withName))
-          val validDisplay = Try(prompt.map(OpenIDDisplay.withName))
+        validParams match {
+          case Success(r) => Right(r, client)
+          case Failure(e) =>
+            Logger.debug(s"Got exception while checking parameters of request $e")
+            Left(ErrorCodes.INVALID_REQUEST_OBJECT)
+        }
+      } else {
+        Left(ErrorCodes.INVALID_REDIRECT_URI)
+      }
 
-          if (validTypes.isFailure)
-            Left(ErrorCodes.INVALIDE_RESPONSE_TYPE)
-          else if (validScopes.isFailure)
-            Left(ErrorCodes.INVALID_SCOPE)
-          else if (!client.redirectURIs.contains(redirect_uri))
-            Left(ErrorCodes.INVALID_REDIRECT_URI)
-          else if (validPrompt.isFailure)
-            Left(ErrorCodes.INVALID_PROMPT)
-          else if (validDisplay.isFailure)
-            Left(ErrorCodes.INVALID_DISPLAY)
+    Source.fromFuture(clientRepository.findByClientID(client_id))
+      .map {
+        case Some(client) => validateReq(client)
+        case None =>
+          Left(ErrorCodes.INVALID_CLIENT_ID)
+      }
+      .map {
+        case Right((validReq, client)) =>
+          validatePrompt(validReq.prompt.getOrElse(OpenIDPrompt.CONSENT)).map {
+            case OpenIDPrompt.NONE =>
+
+              // TODO check response_type? should we manage it?
+              validReq.responseTypes.map {
+                case OpenIDResponseType.NONE => None
+                case OpenIDResponseType.CODE => Some(tokenService.createGrantCode(validReq.clientID))
+                case OpenIDResponseType.TOKEN => Some(tokenService.createAccessToken(req.userID))
+                case OpenIDResponseType.ID_TOKEN => Some(tokenService.createIDToken(req.userID, validReq.clientID))
+              }
+                .filter(_.isDefined)
+              // TODO make query string then respond
+
+            case OpenIDPrompt.CONSENT =>
+              // TODO make consent form
+              Ok(views.html.consent()).withSession("preReq" -> req.uri)
+          }
+
+        case Left(err) =>
+          if (err == ErrorCodes.INVALID_REDIRECT_URI)
+            errorResponse(BAD_REQUEST, err)
           else
-            Right(ClientAuthReq(client_id, validTypes.get, validScopes.get, redirect_uri, nonce, state, validPrompt.get, validDisplay.get), client)
-        } else {
-          Left(ErrorCodes.INVALID_REDIRECT_URI)
-        }
-      case None =>
-        Left(ErrorCodes.INVALID_CLIENT_ID)
-    }.map {
-      case Right((validReq, client)) =>
-        // FIXME don't forget prompt and display
-        userConsentRepository.findByUserIDAndClientID(req.userID, client_id).map {
-          case Some(c) =>
-            validReq.prompt.map {
-              case OpenIDPrompt.NONE =>
-                if (validReq.scopes.subsetOf(c.scopes.toSet))
-                  ???
-                // response token
-                else
-                  errorResponse(BAD_REQUEST, ErrorCodes.ILLEGAL_STATE_OF_PROMPT_VALUE, Some(s"Checked state failed of prompt value [none]"))
-              case OpenIDPrompt.LOGIN =>
-
-              case OpenIDPrompt.CONSENT =>
-              case OpenIDPrompt.SELECT_ACCOUNT =>
-            }
-
-
-          // TODO implementation
-          // response toke, id_token, code directly
-
-          // should keep response_type, scopes, client_id, redirect_uri, state... etc. to consent page
-          case None => Ok(views.html.consent())
-        }
-      case Left(err) =>
-        errorResponse(BAD_REQUEST, err)
-    }
+            Redirect(redirect_uri, authErrorQueryParams(err, state), BAD_REQUEST)
+      }
 
 
     Source.single((client_id, response_type, redirect_uri, scope, nonce, state))
@@ -111,30 +112,54 @@ class AuthController @Inject()(sesssionService: ISessionService, userInfoAction:
 
   }
 
-  def promptValidation[A](action: Action[A]) = Action.async(action.parser) { request =>
-    import an.royal.oidc.constants.OpenIDConstants._
-    import an.royal.oidc.constants.OpenIDPrompt._
 
-    Try(request.getQueryString("prompt").map(OpenIDPrompt.withName).map {
-      case NONE =>
-        // check session
-        // check scopes
-        sesssionService.checkSession(request.session.get(SESSION_ID), request.cookies.get(TOKEN).map(_.value))
-        Ok
-      case LOGIN =>
-      // redirect to login directly
-        Ok
-      case CONSENT =>
-      // check session, not check scopes
-        Ok
-      case SELECT_ACCOUNT =>
-        errorResponse(BAD_REQUEST, ErrorCodes.NOT_YET_IMPLEMENTED, Some("select_account of prompt value not yep implemented"))
-    }) match {
-      case Success(Some(result)) => Future.successful(result)
-      case Failure(_) => Future.successful(errorResponse(BAD_REQUEST, ErrorCodes.INVALID_PROMPT))
-      case _ => action(request)
-    }
+  private def authErrorQueryParams(errorCode: ErrorCode, state: Option[String]): Map[String, Seq[String]] = state match {
+    case Some(s) => Map("error" -> Seq(errorCode.toString.toLowerCase), "state" -> Seq(s))
+    case None => Map("error" -> Seq(errorCode.toString.toLowerCase))
   }
+
+
+  private def validatePrompt(prompt: OpenIDPrompt.Prompt)(implicit request: Request[_]): Future[OpenIDPrompt.Prompt] =
+    prompt match {
+      case OpenIDPrompt.NONE =>
+
+        sessionService.checkSession(request.session.get("sessionID"), request.cookies.get("token").map(_.value))
+          .flatMap {
+            case Success(claims: Claims) =>
+
+              val validScopesResult: Option[Future[OpenIDPrompt.Prompt]] =
+                for {
+                  userID <- Option(claims.getSubject)
+                  clientID <- request.getQueryString("client_id")
+                  scopes <- request.getQueryString("scope").map(_.toLowerCase.split(" +").toSet)
+                } yield {
+                  userConsentRepository.findByUserIDAndClientID(userID, clientID)
+                    .filter(_.exists(c => scopes.subsetOf(c.scopes.toSet)))
+                    .flatMap {
+                      case Some(_) => Future.successful(OpenIDPrompt.NONE)
+                      case None => Future.failed(OpenIDException(ErrorCodes.CONSENT_REQUIRED))
+                    }
+                }
+
+              validScopesResult.getOrElse(Future.failed(OpenIDException(ErrorCodes.CONSENT_REQUIRED, Some("User not yet consent the scopes"))))
+            case _ => Future.failed(OpenIDException(ErrorCodes.LOGIN_REQUIRED))
+          }
+
+      case OpenIDPrompt.CONSENT =>
+        // check session, not need to check scopes
+        sessionService.checkSession(request.session.get("sessionID"), request.cookies.get("token").map(_.value))
+          .map {
+            case Success(_) => OpenIDPrompt.CONSENT
+            case _ => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED)
+          }
+
+      // We did not let client force user to login.
+      // Instead, we show the information on consent page and make a sing in button if user want to change there account
+      case OpenIDPrompt.LOGIN => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))
+
+      // TODO implementation
+      case OpenIDPrompt.SELECT_ACCOUNT => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))
+    }
 
 
 }
