@@ -29,9 +29,9 @@ class TokenRepository @Inject()(@NamedDatabase("openid") protected val dbConfigP
 
     def info = column[JsValue]("client_id")
 
-    def createdTime = column[Long]("created_time", O.Default(System.currentTimeMillis))
+    def createdTime = column[Long]("created_time", O.SqlType("bigint default extract(epoch from now()) * 1000"))
 
-    def lastModifiedTime = column[Long]("last_modified_time", O.Default(System.currentTimeMillis))
+    def lastModifiedTime = column[Long]("last_modified_time", O.SqlType("bigint default extract(epoch from now()) * 1000"))
 
     def isDeleted = column[Boolean]("is_deleted", O.Default(false))
 
