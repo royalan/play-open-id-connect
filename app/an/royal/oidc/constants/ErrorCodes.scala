@@ -11,7 +11,7 @@ object ErrorCodes extends Enumeration {
   val INVALID_PROMPT = Value(10006)
   val INVALID_DISPLAY = Value(10007)
   val ILLEGAL_STATE_OF_PROMPT_VALUE = Value(10008)
-  val SESSION_NOT_FOUND = Value(10009)
+//  val SESSION_NOT_FOUND = Value(10009)
   val USER_NOT_FOUND = Value(10010)
   val SECRET_KEY_NOT_FOUND = Value(10011)
 

@@ -4,13 +4,12 @@ import javax.inject._
 
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
-import an.royal.oidc.OpenIDException
 import an.royal.oidc.constants.ErrorCodes.ErrorCode
 import an.royal.oidc.constants.{ErrorCodes, OpenIDDisplay, OpenIDPrompt, OpenIDResponseType}
 import an.royal.oidc.dtos.ClientAuthReq
 import an.royal.oidc.repositories.{Client, ClientRepository, TokenRepository, UserConsentRepository}
 import an.royal.oidc.services.{SessionService, TokenService}
-import io.jsonwebtoken.Claims
+import an.royal.oidc.{InvalidSessionException, OpenIDException}
 import play.api.Logger
 import play.api.mvc._
 
@@ -25,18 +24,6 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
   import an.royal.oidc.dtos.HttpBaseResponse._
 
   /**
-    * 1. according to [prompt] parameter to determine let user login or not. prompt: none, login, consent, select_account
-    *   1.1 none: check user has signed in by checking token in cookie, session or header, and response code or token directly.
-    *   1.2 login: popup login page always.
-    *   1.3 consent: check user has signed in and open consent page
-    *   1.4 select_account: let user select different accounts to login.
-    * 2. verify client_id with authorities. response_type, return_url, scope
-    * 3. let user signed in
-    * 4. user-consent screen let user confirm scope
-    * 5. check response_type, code: grant code, id_token: scope in (openid), token: access token
-    *   ex. token, id_token, code token, code id_token, token id_token, code token id_token, none
-    * 6. respond
-    *
     * @param client_id     - client ID
     * @param response_type - OpenIDResponseType
     * @param scope         - scopes own by client
@@ -48,7 +35,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
     * @return Asynchronous response
     */
   def auth(client_id: String, response_type: String, scope: String, redirect_uri: String, nonce: String,
-           state: Option[String], prompt: Option[String], display: Option[String]) = userInfoAction.async { implicit req =>
+           state: Option[String], prompt: Option[String], display: Option[String]): Action[AnyContent] = Action.async { implicit req =>
 
     def validateReq(client: Client) =
       if (client.redirectURIs.contains(redirect_uri.trim)) {
@@ -72,7 +59,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       }
 
 
-    // ------- begin -------- //
+    // ------------------- begin --------------------- //
     Source.fromFuture(clientRepository.findByClientID(client_id))
       .map {
         case Some(client) => validateReq(client)
@@ -81,9 +68,10 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       }
       .mapAsync(1) {
         case Right((validReq, client)) =>
-          // FIXME default value should check first
-          validatePrompt(validReq.prompt.getOrElse(OpenIDPrompt.CONSENT)).map {
-            // Only map NONE and CONSENT, others would be non implemented exception
+
+          val userID = sessionService.checkSession(req.session.get("sessionID"), req.cookies.get("token").map(_.value)).map(_.getSubject)
+
+          validatePrompt(validReq, userID).map {
             case OpenIDPrompt.NONE =>
 
               // TODO check response_type? should we manage it?
@@ -91,11 +79,11 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
                 .filter(_ != OpenIDResponseType.NONE)
                 .map {
                   case OpenIDResponseType.CODE => tokenService.createGrantCode(validReq.clientID)
-                  case OpenIDResponseType.TOKEN => tokenService.createAccessToken(req.userID)
-                  case OpenIDResponseType.ID_TOKEN => tokenService.createIDToken(req.userID, validReq.clientID)
+                  case OpenIDResponseType.TOKEN => userID.flatMap(tokenService.createAccessToken)
+                  case OpenIDResponseType.ID_TOKEN => userID.flatMap(uid => tokenService.createIDToken(uid, validReq.clientID))
                 }
-              // TODO make query string then respond
 
+              // TODO make query string then respond
 
               Ok("It's NONE prompt!!")
 
@@ -111,7 +99,6 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
             Redirect(redirect_uri, authErrorQueryParams(err, state)))
       }
       .runWith(Sink.head)
-      .recover(exceptionToErrResp)
   }
 
 
@@ -123,59 +110,44 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
   }
 
 
-  private def validatePrompt(prompt: OpenIDPrompt.Prompt)(implicit request: Request[_]): Future[OpenIDPrompt.Prompt] =
-    prompt match {
+  private def validatePrompt(validReq: ClientAuthReq, userID: Future[String]): Future[OpenIDPrompt.Prompt] =
+    validReq.prompt map {
       case OpenIDPrompt.NONE =>
-
-        sessionService.checkSession(request.session.get("sessionID"), request.cookies.get("token").map(_.value))
-          .flatMap {
-            case Success(claims: Claims) =>
-
-              val validScopesResult: Option[Future[OpenIDPrompt.Prompt]] =
-                for {
-                  userID <- Option(claims.getSubject)
-                  clientID <- request.getQueryString("client_id")
-                  scopes <- request.getQueryString("scope").map(_.toLowerCase.split(" +").toSet)
-                } yield {
-                  userConsentRepository.findByUserIDAndClientID(userID, clientID)
-                    .map(_.exists(c => scopes.subsetOf(c.scopes.toSet)))
-                    .map(existed => if (existed) OpenIDPrompt.NONE else throw OpenIDException(ErrorCodes.CONSENT_REQUIRED))
-                }
-              validScopesResult.getOrElse(Future.failed(OpenIDException(ErrorCodes.CONSENT_REQUIRED, Some("User not yet consent the scopes"))))
-            case _ => Future.failed(OpenIDException(ErrorCodes.LOGIN_REQUIRED))
-          }
+        userID.flatMap(uid => checkConsentScopes(uid, validReq.clientID, validReq.scopes))
+          .map {
+            case OpenIDPrompt.CONSENT => throw OpenIDException(ErrorCodes.CONSENT_REQUIRED)
+            case OpenIDPrompt.LOGIN => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED)
+            case p => p
+          }.recover { case _: InvalidSessionException => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED) }
 
       case OpenIDPrompt.CONSENT =>
-        // check session, not need to check scopes
-        sessionService.checkSession(request.session.get("sessionID"), request.cookies.get("token").map(_.value))
-          .map {
-            case Success(_) => OpenIDPrompt.CONSENT
-            case _ => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED)
-          }
+        userID.map(_ => OpenIDPrompt.CONSENT).recover { case _: InvalidSessionException => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED) }
 
       // We did not let client force user to login.
       // Instead, we show the information on consent page and make a sing in button if user want to change there account
-      case OpenIDPrompt.LOGIN => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))
+      case OpenIDPrompt.LOGIN =>
+        userID.map(_ => OpenIDPrompt.CONSENT)
 
       // TODO implementation
       case OpenIDPrompt.SELECT_ACCOUNT => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))
+    } getOrElse {
+      userID.flatMap(uid => checkConsentScopes(uid, validReq.clientID, validReq.scopes))
     }
 
-  def checkPrompt[A](action: Action[A]) = Action.async(action.parser) { implicit request =>
-    request.getQueryString("prompt")
-      .map(OpenIDPrompt.withName)
-      .map(validatePrompt)
-      .map(_.map(_ => action(request)).recover(exceptionToErrResp))
-      .getOrElse(action(request))
-
-    action(request)
-  }
-
-  def exceptionToErrResp: PartialFunction[Throwable, Result] = {
-    case OpenIDException(code, msg) => errorResponse(BAD_REQUEST, code, msg)
-    case t: Throwable =>
-      Logger.error(s"Unexpected exception", t)
-      errorResponse(INTERNAL_SERVER_ERROR, ErrorCodes.UNKNOWN_ERROR)
+  /**
+    * Check status of consent
+    *
+    * @param userID
+    * @param clientID
+    * @param scopes
+    * @return OpenIDPrompt =>
+    *         CONSENT: need user consent
+    *         NONE: generate token directly
+    */
+  private def checkConsentScopes(userID: String, clientID: String, scopes: Set[String]) = {
+    userConsentRepository.findByUserIDAndClientID(userID, clientID)
+      .map(_.exists(c => scopes.subsetOf(c.scopes.toSet)))
+      .map(existed => if (existed) OpenIDPrompt.NONE else OpenIDPrompt.CONSENT)
   }
 
 }
