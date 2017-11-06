@@ -49,7 +49,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
         }
 
         validParams match {
-          case Success(r) => Right(r, client)
+          case Success(r) => Right(r)
           case Failure(e) =>
             Logger.debug("Got exception while checking parameters of request.", e)
             Left(ErrorCodes.INVALID_REQUEST_OBJECT)
@@ -67,7 +67,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
           Left(ErrorCodes.INVALID_CLIENT_ID)
       }
       .mapAsync(1) {
-        case Right((validReq, client)) =>
+        case Right(validReq) =>
 
           val userID = sessionService.checkSession(req.session.get("sessionID"), req.cookies.get("token").map(_.value)).map(_.getSubject)
 
@@ -86,15 +86,13 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
               Future.sequence(tokens)
                 .map(qSet => state.map(s => qSet + ("state" -> Seq(s))).getOrElse(qSet))
                 .map(qSet =>
-                  qSet.collectFirst{
-                    case ("token", _) | ("id_token", _) =>
-                      Redirect(Call("get", redirect_uri, qSet.foldLeft("")((o, v) => o + s"${v._1}=${v._2.head}&").dropRight(1)))
-                    case _ =>
-                      Redirect(redirect_uri, qSet.toMap)
-                  }.get)
+                  if (qSet.exists(q => q._1 == "token" || q._1 == "id_token"))
+                    Redirect(Call("get", redirect_uri, qSet.foldLeft("")((o, v) => o + s"${v._1}=${v._2.head}&").dropRight(1)))
+                  else
+                    Redirect(redirect_uri, qSet.toMap)
+                )
 
             case OpenIDPrompt.CONSENT =>
-              // TODO make consent form
               Logger.debug(s"Pre-request URI: ${req.uri}")
               Future.successful(Ok(views.html.consent()).withSession(req.session + ("preReq" -> req.uri)))
           }
