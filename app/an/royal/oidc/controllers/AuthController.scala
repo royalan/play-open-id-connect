@@ -71,27 +71,34 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
 
           val userID = sessionService.checkSession(req.session.get("sessionID"), req.cookies.get("token").map(_.value)).map(_.getSubject)
 
-          validatePrompt(validReq, userID).map {
+          validatePrompt(validReq, userID).flatMap {
             case OpenIDPrompt.NONE =>
 
               // TODO check response_type? should we manage it?
-              validReq.responseTypes
+              val tokens = validReq.responseTypes
                 .filter(_ != OpenIDResponseType.NONE)
                 .map {
-                  case OpenIDResponseType.CODE => tokenService.createGrantCode(validReq.clientID)
-                  case OpenIDResponseType.TOKEN => userID.flatMap(tokenService.createAccessToken)
-                  case OpenIDResponseType.ID_TOKEN => userID.flatMap(uid => tokenService.createIDToken(uid, validReq.clientID))
+                  case OpenIDResponseType.CODE => tokenService.createGrantCode(validReq.clientID).map("code" -> Seq(_))
+                  case OpenIDResponseType.TOKEN => userID.flatMap(tokenService.createAccessToken).map("token" -> Seq(_))
+                  case OpenIDResponseType.ID_TOKEN => userID.flatMap(uid => tokenService.createIDToken(uid, validReq.clientID, nonce)).map("id_token" -> Seq(_))
                 }
 
-              // TODO make query string then respond
-
-              Ok("It's NONE prompt!!")
+              Future.sequence(tokens)
+                .map(qSet => state.map(s => qSet + ("state" -> Seq(s))).getOrElse(qSet))
+                .map(qSet =>
+                  qSet.collectFirst{
+                    case ("token", _) | ("id_token", _) =>
+                      Redirect(Call("get", redirect_uri, qSet.foldLeft("")((o, v) => o + s"${v._1}=${v._2.head}&").dropRight(1)))
+                    case _ =>
+                      Redirect(redirect_uri, qSet.toMap)
+                  }.get)
 
             case OpenIDPrompt.CONSENT =>
               // TODO make consent form
               Logger.debug(s"Pre-request URI: ${req.uri}")
-              Ok(views.html.consent()).withSession(req.session + ("preReq" -> req.uri))
+              Future.successful(Ok(views.html.consent()).withSession(req.session + ("preReq" -> req.uri)))
           }
+
         case Left(err) => Future.successful(
           if (err == ErrorCodes.INVALID_REDIRECT_URI)
             errorResponse(BAD_REQUEST, err)

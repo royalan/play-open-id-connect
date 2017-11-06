@@ -15,6 +15,7 @@ GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController
 
 # admin
 GET     /init                       an.royal.oidc.controllers.AdminController.init
+POST    /key                        an.royal.oidc.controllers.AdminController.addSecretKey
 
 
 GET     /                           an.royal.oidc.controllers.HomeController.landing

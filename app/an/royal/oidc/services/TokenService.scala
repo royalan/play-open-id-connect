@@ -25,14 +25,14 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
     cache.set(token, clientID).map(_ => token)
   }
 
-  def createIDToken(userID: String, clientID: String): Future[String] = {
+  def createIDToken(userID: String, clientID: String, nonce: String): Future[String] = {
     secretKeyRepository.findByType("id_token").flatMap {
-      case Some(s) => createJWT(userID, clientID, s.key)
+      case Some(s) => createJWT(userID, clientID, s.key, nonce)
       case None => Future.failed(OpenIDException(ErrorCodes.SECRET_KEY_NOT_FOUND, Some("Can not found secret key for id_token")))
     }
   }
 
-  def createJWT(userID: String, clientID: String, key: Array[Byte]): Future[String] = {
+  def createJWT(userID: String, clientID: String, key: Array[Byte], nonce: String): Future[String] = {
     val calendar = Calendar.getInstance
     val now = calendar.getTime
     calendar.add(Calendar.DAY_OF_YEAR, config.get[Int]("jwt.duration"))
@@ -47,7 +47,7 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
           .setIssuer(config.get[String]("jwt.issuer"))
           .setIssuedAt(now)
           .setExpiration(exp)
-          .setClaims(buildCustomerClaims(u))
+          .setClaims(buildCustomerClaims(u, nonce))
           .compact()
       case None => throw OpenIDException(ErrorCodes.USER_NOT_FOUND)
     }
@@ -61,13 +61,14 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
   }
 
 
-  private def buildCustomerClaims(user: User): Claims = {
+  private def buildCustomerClaims(user: User, nonce: String): Claims = {
     val claims = Jwts.claims()
     claims.put("name", user.name)
     claims.put("display_name", user.displayName)
     claims.put("avatar", user.avatar)
     claims.put("email", user.email)
     claims.put("email_verified", user.emailVerified.toString)
+    claims.put("nonce", nonce)
     claims
   }
 
