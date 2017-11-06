@@ -56,7 +56,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
           validTypes <- Try(response_type.split(" +").map(_.toLowerCase).map(OpenIDResponseType.withName).toSet)
           validScopes <- Try(scope.split(" ").map(_.trim.toLowerCase).toSet).filter(_.subsetOf(client.scopes.toSet))
           validPrompt <- Try(prompt.map(OpenIDPrompt.withName))
-          validDisplay <- Try(prompt.map(OpenIDDisplay.withName))
+          validDisplay <- Try(display.map(OpenIDDisplay.withName))
         } yield {
           ClientAuthReq(client_id, validTypes, validScopes, redirect_uri, nonce, state, validPrompt, validDisplay)
         }
@@ -64,7 +64,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
         validParams match {
           case Success(r) => Right(r, client)
           case Failure(e) =>
-            Logger.debug(s"Got exception while checking parameters of request $e")
+            Logger.debug("Got exception while checking parameters of request.", e)
             Left(ErrorCodes.INVALID_REQUEST_OBJECT)
         }
       } else {
@@ -81,6 +81,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       }
       .mapAsync(1) {
         case Right((validReq, client)) =>
+          // FIXME default value should check first
           validatePrompt(validReq.prompt.getOrElse(OpenIDPrompt.CONSENT)).map {
             // Only map NONE and CONSENT, others would be non implemented exception
             case OpenIDPrompt.NONE =>
@@ -107,15 +108,10 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
           if (err == ErrorCodes.INVALID_REDIRECT_URI)
             errorResponse(BAD_REQUEST, err)
           else
-            Redirect(redirect_uri, authErrorQueryParams(err, state), BAD_REQUEST))
+            Redirect(redirect_uri, authErrorQueryParams(err, state)))
       }
       .runWith(Sink.head)
-      .recover {
-        case OpenIDException(code, msg) => errorResponse(BAD_REQUEST, code, msg)
-        case t: Throwable =>
-          Logger.error(s"Unexpected exception $t")
-          errorResponse(INTERNAL_SERVER_ERROR, ErrorCodes.UNKNOWN_ERROR)
-      }
+      .recover(exceptionToErrResp)
   }
 
 
@@ -142,13 +138,9 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
                   scopes <- request.getQueryString("scope").map(_.toLowerCase.split(" +").toSet)
                 } yield {
                   userConsentRepository.findByUserIDAndClientID(userID, clientID)
-                    .filter(_.exists(c => scopes.subsetOf(c.scopes.toSet)))
-                    .flatMap {
-                      case Some(_) => Future.successful(OpenIDPrompt.NONE)
-                      case None => Future.failed(OpenIDException(ErrorCodes.CONSENT_REQUIRED))
-                    }
+                    .map(_.exists(c => scopes.subsetOf(c.scopes.toSet)))
+                    .map(existed => if (existed) OpenIDPrompt.NONE else throw OpenIDException(ErrorCodes.CONSENT_REQUIRED))
                 }
-
               validScopesResult.getOrElse(Future.failed(OpenIDException(ErrorCodes.CONSENT_REQUIRED, Some("User not yet consent the scopes"))))
             case _ => Future.failed(OpenIDException(ErrorCodes.LOGIN_REQUIRED))
           }
@@ -169,5 +161,21 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       case OpenIDPrompt.SELECT_ACCOUNT => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))
     }
 
+  def checkPrompt[A](action: Action[A]) = Action.async(action.parser) { implicit request =>
+    request.getQueryString("prompt")
+      .map(OpenIDPrompt.withName)
+      .map(validatePrompt)
+      .map(_.map(_ => action(request)).recover(exceptionToErrResp))
+      .getOrElse(action(request))
+
+    action(request)
+  }
+
+  def exceptionToErrResp: PartialFunction[Throwable, Result] = {
+    case OpenIDException(code, msg) => errorResponse(BAD_REQUEST, code, msg)
+    case t: Throwable =>
+      Logger.error(s"Unexpected exception", t)
+      errorResponse(INTERNAL_SERVER_ERROR, ErrorCodes.UNKNOWN_ERROR)
+  }
 
 }
