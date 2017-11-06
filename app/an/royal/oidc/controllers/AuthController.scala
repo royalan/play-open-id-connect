@@ -71,47 +71,55 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
         Left(ErrorCodes.INVALID_REDIRECT_URI)
       }
 
+
+    // ------- begin -------- //
     Source.fromFuture(clientRepository.findByClientID(client_id))
       .map {
         case Some(client) => validateReq(client)
         case None =>
           Left(ErrorCodes.INVALID_CLIENT_ID)
       }
-      .map {
+      .mapAsync(1) {
         case Right((validReq, client)) =>
           validatePrompt(validReq.prompt.getOrElse(OpenIDPrompt.CONSENT)).map {
+            // Only map NONE and CONSENT, others would be non implemented exception
             case OpenIDPrompt.NONE =>
 
               // TODO check response_type? should we manage it?
-              validReq.responseTypes.map {
-                case OpenIDResponseType.NONE => None
-                case OpenIDResponseType.CODE => Some(tokenService.createGrantCode(validReq.clientID))
-                case OpenIDResponseType.TOKEN => Some(tokenService.createAccessToken(req.userID))
-                case OpenIDResponseType.ID_TOKEN => Some(tokenService.createIDToken(req.userID, validReq.clientID))
-              }
-                .filter(_.isDefined)
+              validReq.responseTypes
+                .filter(_ != OpenIDResponseType.NONE)
+                .map {
+                  case OpenIDResponseType.CODE => tokenService.createGrantCode(validReq.clientID)
+                  case OpenIDResponseType.TOKEN => tokenService.createAccessToken(req.userID)
+                  case OpenIDResponseType.ID_TOKEN => tokenService.createIDToken(req.userID, validReq.clientID)
+                }
               // TODO make query string then respond
+
+
+              Ok("It's NONE prompt!!")
 
             case OpenIDPrompt.CONSENT =>
               // TODO make consent form
-              Ok(views.html.consent()).withSession("preReq" -> req.uri)
+              Logger.debug(s"Pre-request URI: ${req.uri}")
+              Ok(views.html.consent()).withSession(req.session + ("preReq" -> req.uri))
           }
-
-        case Left(err) =>
+        case Left(err) => Future.successful(
           if (err == ErrorCodes.INVALID_REDIRECT_URI)
             errorResponse(BAD_REQUEST, err)
           else
-            Redirect(redirect_uri, authErrorQueryParams(err, state), BAD_REQUEST)
+            Redirect(redirect_uri, authErrorQueryParams(err, state), BAD_REQUEST))
       }
-
-
-    Source.single((client_id, response_type, redirect_uri, scope, nonce, state))
-      .map(t => Ok(t.productIterator.mkString(", ")))
       .runWith(Sink.head)
-
-
+      .recover {
+        case OpenIDException(code, msg) => errorResponse(BAD_REQUEST, code, msg)
+        case t: Throwable =>
+          Logger.error(s"Unexpected exception $t")
+          errorResponse(INTERNAL_SERVER_ERROR, ErrorCodes.UNKNOWN_ERROR)
+      }
   }
 
+
+  // ---------------- common functions -------------------- //
 
   private def authErrorQueryParams(errorCode: ErrorCode, state: Option[String]): Map[String, Seq[String]] = state match {
     case Some(s) => Map("error" -> Seq(errorCode.toString.toLowerCase), "state" -> Seq(s))

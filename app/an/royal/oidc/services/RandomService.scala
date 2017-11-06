@@ -19,7 +19,7 @@ class RandomService @Inject()() {
 
   // Might be collision
   def genNonUniqueRandomByteArray: Array[Byte] = {
-    val arr = new Array[Byte](8)
+    val arr = new Array[Byte](12)
     random.nextBytes(arr)
     arr
   }

@@ -1,6 +1,5 @@
 package an.royal.oidc.controllers
 
-import java.util.Base64
 import javax.inject._
 
 import an.royal.oidc.repositories.UserRepository
@@ -12,7 +11,6 @@ import play.api.data.Form
 import play.api.mvc._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Random
 
 @Singleton
 class LoginController @Inject()(userInfoAction: UserInfoAction, cache: SyncCacheApi, randomService: RandomService, userRepository: UserRepository, cc: ControllerComponents)
@@ -27,15 +25,15 @@ class LoginController @Inject()(userInfoAction: UserInfoAction, cache: SyncCache
       userRepository.checkUserPassword(loginReq.email, loginReq.password).map {
         // verify successfully
         case Some(userID) =>
-          val sid = Base64.getEncoder.encodeToString(Random.nextString(4).getBytes)
+          val sid = randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.get)
           val key = randomService.genNonUniqueRandomByteArray
           cache.set(sid, key)
 
           // if there is previous request store in session, redirect to it. otherwise, just redirect to root path
           Logger.debug(s"get preReq ${req.session.get("preReq")}")
           req.session.get("preReq").map(Redirect(_))
-            .getOrElse(Results.Status(PERMANENT_REDIRECT)(views.html.welcome()))
-            .withSession(SESSION_ID -> sid)
+            .getOrElse(Redirect(routes.HomeController.landing()))
+            .withSession(req.session + (SESSION_ID -> sid))
             .withCookies(
               // Now we only set user ID to token, we can set any other values like `email`, `avatar` if need.
               Cookie(TOKEN, Jwts.builder().signWith(SignatureAlgorithm.HS256, key).setSubject(userID).compact(), None))

@@ -43,7 +43,7 @@ package object controllers {
           case Success(claims: Claims) => block(new UserRequest[A](claims.getSubject, request))
           // FIXME should valid previous request and now we only support GET request. If we want to support POST request, save whole request to cache might be the solution.
           case Failure(_) =>
-            Logger.debug("Check session fail, redirect to login page.")
+            Logger.debug("Check session fail, clear session and redirect to login page.")
             Future.successful(Results.Redirect("/").withSession("preReq" -> request.uri))
         }
     }

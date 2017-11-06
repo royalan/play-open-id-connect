@@ -25,7 +25,6 @@ class SessionService @Inject()(cache: AsyncCacheApi)(implicit ec: ExecutionConte
         cache.get[Array[Byte]](sid)
           .map {
             case Some(key) =>
-              Logger.info(s"key: $key")
               // trying to decode and valid token by setting signing key.
               Success(Jwts.parser().setSigningKey(key).parseClaimsJws(t).getBody)
             case _ => Failure(OpenIDException(ErrorCodes.SESSION_NOT_FOUND))
