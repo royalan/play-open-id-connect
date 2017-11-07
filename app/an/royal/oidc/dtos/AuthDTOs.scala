@@ -19,3 +19,26 @@ case class ClientAuthReq(
                           prompt: Option[Prompt],
                           display: Option[Display]
                         )
+
+case class UserConsentReq(
+                           clientID: String,
+                           scopes: String
+                         )
+
+case class UserConsentDetail(
+                              userName: String,
+                              userAvatar: Option[String],
+                              userEmail: String,
+                              clientLogo: String,
+                              clientHomePage: String,
+                              clientName: String,
+                              clientTOS: String,
+                              clientPrivacy: String,
+                              scopes: Set[ScopeDTO]
+                            )
+
+case class ScopeDTO(
+                     name: String,
+                     description: String
+                   )
+

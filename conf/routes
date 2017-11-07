@@ -5,6 +5,7 @@
 # authorization
 # http://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint
 GET     /oauth2/v1/auth             an.royal.oidc.controllers.AuthController.auth(client_id, response_type, scope, redirect_uri, nonce, state: Option[String], prompt: Option[String], display: Option[String])
+POST    /oauth2/v1/consent          an.royal.oidc.controllers.AuthController.consentToClientScopes
 
 # token
 POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.create(code, client_id, redirect_uri, grant_type)
@@ -13,14 +14,13 @@ POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.cr
 GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController.getUserInfo
 
 
-# admin
-GET     /init                       an.royal.oidc.controllers.AdminController.init
-POST    /key                        an.royal.oidc.controllers.AdminController.addSecretKey
-
-
 GET     /                           an.royal.oidc.controllers.HomeController.landing
 POST    /login                      an.royal.oidc.controllers.LoginController.login
 
+
+# admin
+GET     /init                       an.royal.oidc.controllers.AdminController.init
+POST    /key                        an.royal.oidc.controllers.AdminController.addSecretKey
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)

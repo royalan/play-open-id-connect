@@ -6,11 +6,13 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
 import an.royal.oidc.constants.ErrorCodes.ErrorCode
 import an.royal.oidc.constants.{ErrorCodes, OpenIDDisplay, OpenIDPrompt, OpenIDResponseType}
-import an.royal.oidc.dtos.ClientAuthReq
-import an.royal.oidc.repositories.{Client, ClientRepository, TokenRepository, UserConsentRepository}
+import an.royal.oidc.dtos.{ClientAuthReq, ScopeDTO, UserConsentDetail, UserConsentReq}
+import an.royal.oidc.repositories._
 import an.royal.oidc.services.{SessionService, TokenService}
 import an.royal.oidc.{InvalidSessionException, OpenIDException}
 import play.api.Logger
+import play.api.data.Form
+import play.api.data.Forms._
 import play.api.mvc._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -18,10 +20,16 @@ import scala.util.{Failure, Success, Try}
 
 @Singleton
 class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: TokenRepository, clientRepository: ClientRepository, userConsentRepository: UserConsentRepository,
-                               tokenService: TokenService, sessionService: SessionService, cc: ControllerComponents)
+                               scopeRepository: ScopeRepository, userRepository: UserRepository, tokenService: TokenService, sessionService: SessionService, cc: ControllerComponents)
                               (implicit mat: Materializer, ec: ExecutionContext) extends AbstractController(cc) {
 
   import an.royal.oidc.dtos.HttpBaseResponse._
+
+  val userConsentForm = Form(
+    mapping(
+      "clientID" -> text,
+      "scopes" -> text
+    )(UserConsentReq.apply)(UserConsentReq.unapply))
 
   /**
     * @param client_id     - client ID
@@ -49,7 +57,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
         }
 
         validParams match {
-          case Success(r) => Right(r)
+          case Success(r) => Right(r, client)
           case Failure(e) =>
             Logger.debug("Got exception while checking parameters of request.", e)
             Left(ErrorCodes.INVALID_REQUEST_OBJECT)
@@ -67,7 +75,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
           Left(ErrorCodes.INVALID_CLIENT_ID)
       }
       .mapAsync(1) {
-        case Right(validReq) =>
+        case Right((validReq, client)) =>
 
           val userID = sessionService.checkSession(req.session.get("sessionID"), req.cookies.get("token").map(_.value)).map(_.getSubject)
 
@@ -94,7 +102,18 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
 
             case OpenIDPrompt.CONSENT =>
               Logger.debug(s"Pre-request URI: ${req.uri}")
-              Future.successful(Ok(views.html.consent()).withSession(req.session + ("preReq" -> req.uri)))
+
+              for {
+                scopeDescs <- Future.sequence(validReq.scopes.map(scopeRepository.findByName)).map(_.filter(_.isDefined).map(_.map(s => ScopeDTO(s.name, s.description)).get))
+                uid <- userID
+                userOpt <- userRepository.findByUserID(uid)
+              } yield {
+                userOpt.map(u => UserConsentDetail(u.name, u.avatar, u.email, client.logoURI, client.homepageURI, client.name, client.termsOfServiceURI, client.privacyPolicyURI, scopeDescs))
+                  .map(detail =>
+                    Ok(views.html.consent(detail, userConsentForm.bind(Map("clientID" -> client_id, "scopes" -> scope))))
+                      .withSession(req.session + ("preReq" -> req.uri)))
+                  .getOrElse(errorResponse(BAD_REQUEST, ErrorCodes.USER_NOT_FOUND))
+              }
           }
 
         case Left(err) => Future.successful(
@@ -106,6 +125,30 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       .runWith(Sink.head)
   }
 
+  def consentToClientScopes: Action[AnyContent] = userInfoAction.async { implicit request =>
+    val successFunc = { userConsent: UserConsentReq =>
+      Logger.debug(s"$userConsent")
+      userConsentRepository.findByUserIDAndClientID(request.userID, userConsent.clientID)
+        .map { optUC =>
+          val scopes = userConsent.scopes.split(" +").toList
+          optUC.map(uc => uc.copy(scopes = (uc.scopes ::: scopes).distinct))
+            .getOrElse(UserConsent(request.userID, userConsent.clientID, scopes, System.currentTimeMillis, System.currentTimeMillis, false))
+        }
+        .flatMap(userConsentRepository.insertOrUpdate)
+        // TODO we can generate token or code directly?
+        .map(_ => Redirect(request.session("preReq")))
+    }
+
+    val errorFunc = { form: Form[UserConsentReq] =>
+      form.errors.foreach(err => Logger.warn(s"${err.key}: ${err.message}"))
+      Future.successful {
+        Redirect(request.session("preReq"))
+      }
+    }
+
+    userConsentForm.bindFromRequest().fold(errorFunc, successFunc)
+  }
+
 
   // ---------------- common functions -------------------- //
 
@@ -115,6 +158,14 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
   }
 
 
+  /**
+    * Validate prompt value, if error, just throw exception.
+    *
+    * @param validReq
+    * @param userID - with throw InvalidSessionException while fail
+    * @return Future[OpenIDPrompt.Prompt]
+    * @throws OpenIDException , InvalidSessionException
+    */
   private def validatePrompt(validReq: ClientAuthReq, userID: Future[String]): Future[OpenIDPrompt.Prompt] =
     validReq.prompt map {
       case OpenIDPrompt.NONE =>

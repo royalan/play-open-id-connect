@@ -4,6 +4,8 @@ import java.security.SecureRandom
 import java.util.{Base64, Calendar, UUID}
 import javax.inject._
 
+import akka.stream.Materializer
+import akka.stream.scaladsl.{Sink, Source}
 import an.royal.oidc.OpenIDException
 import an.royal.oidc.constants.ErrorCodes
 import an.royal.oidc.repositories.{SecretKeyRepository, User, UserRepository}
@@ -16,7 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository: SecretKeyRepository, randomService: RandomService,
                              cache: AsyncCacheApi, config: Configuration)
-                            (implicit ec: ExecutionContext) {
+                            (implicit mat: Materializer, ec: ExecutionContext) {
 
   val random = new SecureRandom()
 
@@ -54,10 +56,9 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
   }
 
   def createGrantCode(clientID: String): Future[String] = {
-    val syncCache = cache.sync
-    val code = randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, syncCache.get)
-    syncCache.set(code, clientID)
-    Future.successful(code)
+    Source.single(randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.sync.get))
+      .mapAsync(1)(code => cache.set(code, clientID).map(_ => code))
+      .runWith(Sink.head)
   }
 
 

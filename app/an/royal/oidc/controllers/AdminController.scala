@@ -9,28 +9,22 @@ import an.royal.oidc.services.RandomService
 import play.api.libs.json.Json
 import play.api.mvc.{AbstractController, ControllerComponents}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class AdminController @Inject()(secretKeyRepository: SecretKeyRepository, clientRepository: ClientRepository, userRepository: UserRepository, userConsentRepository: UserConsentRepository, tokenRepository: TokenRepository,
+class AdminController @Inject()(scopeRepository: ScopeRepository, secretKeyRepository: SecretKeyRepository, clientRepository: ClientRepository, userRepository: UserRepository, userConsentRepository: UserConsentRepository, tokenRepository: TokenRepository,
                                 randomService: RandomService, cc: ControllerComponents)
                                (implicit mat: Materializer, ec: ExecutionContext) extends AbstractController(cc) {
 
   def init = Action.async {
-    val u = userRepository.createTable
-    val uc = userConsentRepository.createTable
-    val t = tokenRepository.createTable
-    val c = clientRepository.createTable
-    val sk = secretKeyRepository.createTable
-    for {
-      _ <- u
-      _ <- uc
-      _ <- t
-      _ <- c
-      _ <- sk
-    } yield {
-      Ok
-    }
+    Future.sequence(List(
+      userRepository.createTable,
+      userConsentRepository.createTable,
+      tokenRepository.createTable,
+      clientRepository.createTable,
+      secretKeyRepository.createTable,
+      scopeRepository.createTable
+    )).map(_ => Ok)
   }
 
   def addSecretKey = Action.async(parse.json) { request =>

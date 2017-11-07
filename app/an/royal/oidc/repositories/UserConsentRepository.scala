@@ -20,6 +20,8 @@ class UserConsentRepository @Inject()(@NamedDatabase("openid") protected val dbC
 
   def insert(consent: UserConsent): Future[Int] = db.run(userConsents += consent)
 
+  def insertOrUpdate(consent: UserConsent): Future[Int] = db.run(userConsents.insertOrUpdate(consent))
+
   def findByUserIDAndClientID(userID: String, clientID: String): Future[Option[UserConsent]] =
     db.run(userConsents.filter(c => c.userID === userID && c.clientID === clientID).result.headOption)
 

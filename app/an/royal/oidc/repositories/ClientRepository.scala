@@ -88,9 +88,3 @@ case class Client(
                    lastModifiedTime: Long,
                    isDeleted: Boolean
                  )
-
-case class Scope(
-                  id: Long,
-                  name: String,
-                  description: String
-                )

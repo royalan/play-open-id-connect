@@ -27,7 +27,7 @@ class TokenRepository @Inject()(@NamedDatabase("openid") protected val dbConfigP
 
     def id = column[String]("id", O.PrimaryKey)
 
-    def info = column[JsValue]("client_id")
+    def info = column[JsValue]("info")
 
     def createdTime = column[Long]("created_time", O.SqlType("bigint default extract(epoch from now()) * 1000"))
 
