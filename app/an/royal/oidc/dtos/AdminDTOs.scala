@@ -8,6 +8,5 @@ case class CreateSecretKeyReq(
                              )
 
 object AdminDTOs {
-  implicit val errorDetailReads = Json.reads[CreateSecretKeyReq]
-  implicit val errorDetailWrites = Json.writes[CreateSecretKeyReq]
+  implicit val createSecretKeyReqReads = Json.reads[CreateSecretKeyReq]
 }

@@ -10,10 +10,18 @@ import an.royal.oidc.OpenIDException
 import an.royal.oidc.constants.ErrorCodes
 import an.royal.oidc.repositories.{SecretKeyRepository, User, UserRepository}
 import io.jsonwebtoken.{Claims, Jwts, SignatureAlgorithm}
-import play.api.Configuration
 import play.api.cache.AsyncCacheApi
+import play.api.{Configuration, Logger}
 
+import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
+
+case class TokenPayload(
+                      clientID: String,
+                      userID: String,
+                      scopes: Set[String],
+                      redirectURI: String
+                      )
 
 @Singleton
 class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository: SecretKeyRepository, randomService: RandomService,
@@ -22,9 +30,9 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
 
   val random = new SecureRandom()
 
-  def createAccessToken(clientID: String): Future[String] = {
+  def createAccessToken(payload: TokenPayload, duration: Option[Duration]): Future[String] = {
     val token = Base64.getEncoder.encodeToString(UUID.randomUUID().toString.getBytes())
-    cache.set(token, clientID).map(_ => token)
+    cache.set(token, payload, duration.getOrElse(config.get[Duration]("openid.duration.access-token.implicit"))).map(_ => token)
   }
 
   def createIDToken(userID: String, clientID: String, nonce: String): Future[String] = {
@@ -37,6 +45,7 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
   def createJWT(userID: String, clientID: String, key: Array[Byte], nonce: String): Future[String] = {
     val calendar = Calendar.getInstance
     val now = calendar.getTime
+
     calendar.add(Calendar.DAY_OF_YEAR, config.get[Int]("jwt.duration"))
     val exp = calendar.getTime
 
@@ -55,9 +64,11 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
     }
   }
 
-  def createGrantCode(clientID: String): Future[String] = {
-    Source.single(randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.sync.get))
-      .mapAsync(1)(code => cache.set(code, clientID).map(_ => code))
+  def createGrantCode(payload: TokenPayload): Future[String] = {
+    val code = randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.sync.get)
+    Logger.debug(s"Got code: $code")
+    Source.single(code)
+      .mapAsync(1)(code => cache.set(code, payload, config.get[Duration]("openid.duration.grant-code")).map(_ => code))
       .runWith(Sink.head)
   }
 

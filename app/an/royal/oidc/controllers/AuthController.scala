@@ -8,7 +8,7 @@ import an.royal.oidc.constants.ErrorCodes.ErrorCode
 import an.royal.oidc.constants.{ErrorCodes, OpenIDDisplay, OpenIDPrompt, OpenIDResponseType}
 import an.royal.oidc.dtos.{ClientAuthReq, ScopeDTO, UserConsentDetail, UserConsentReq}
 import an.royal.oidc.repositories._
-import an.royal.oidc.services.{SessionService, TokenService}
+import an.royal.oidc.services.{SessionService, TokenPayload, TokenService}
 import an.royal.oidc.{InvalidSessionException, OpenIDException}
 import play.api.Logger
 import play.api.data.Form
@@ -82,12 +82,14 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
           validatePrompt(validReq, userID).flatMap {
             case OpenIDPrompt.NONE =>
 
+              lazy val tokenPayload = userID.map(uid => TokenPayload(validReq.clientID, uid, validReq.scopes, validReq.redirectURI))
+
               // TODO check response_type? should we manage it?
               val tokens = validReq.responseTypes
                 .filter(_ != OpenIDResponseType.NONE)
                 .map {
-                  case OpenIDResponseType.CODE => tokenService.createGrantCode(validReq.clientID).map("code" -> Seq(_))
-                  case OpenIDResponseType.TOKEN => userID.flatMap(tokenService.createAccessToken).map("token" -> Seq(_))
+                  case OpenIDResponseType.CODE => tokenPayload.flatMap(tokenService.createGrantCode).map("code" -> Seq(_))
+                  case OpenIDResponseType.TOKEN => tokenPayload.flatMap(tokenService.createAccessToken(_, None)).map("token" -> Seq(_))
                   case OpenIDResponseType.ID_TOKEN => userID.flatMap(uid => tokenService.createIDToken(uid, validReq.clientID, nonce)).map("id_token" -> Seq(_))
                 }
 

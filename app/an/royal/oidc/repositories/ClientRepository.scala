@@ -24,6 +24,8 @@ class ClientRepository @Inject()(@NamedDatabase("openid") protected val dbConfig
 
   def existedByClientID(clientID: String): Future[Boolean] = db.run(clients.filter(_.clientID === clientID).exists.result)
 
+  def existedByClientIDAndSecret(clientID: String, secret: String): Future[Boolean] = db.run(clients.filter(c => c.clientID === clientID && c.clientSecret === secret).exists.result)
+
   private class ClientTable(tag: Tag) extends Table[Client](tag, "clients") {
 
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)

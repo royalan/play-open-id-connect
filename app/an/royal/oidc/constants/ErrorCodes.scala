@@ -14,6 +14,7 @@ object ErrorCodes extends Enumeration {
 //  val SESSION_NOT_FOUND = Value(10009)
   val USER_NOT_FOUND = Value(10010)
   val SECRET_KEY_NOT_FOUND = Value(10011)
+  val INVALID_GRANT_CODE = Value(10012)
 
 
   // open id auth, ref: http://openid.net/specs/openid-connect-core-1_0.html#AuthError

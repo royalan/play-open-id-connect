@@ -8,7 +8,7 @@ GET     /oauth2/v1/auth             an.royal.oidc.controllers.AuthController.aut
 POST    /oauth2/v1/consent          an.royal.oidc.controllers.AuthController.consentToClientScopes
 
 # token
-POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.create(code, client_id, redirect_uri, grant_type)
+POST    /oauth2/v1/token            an.royal.oidc.controllers.TokenController.create
 
 # user
 GET     /oauth2/v1/userinfo         an.royal.oidc.controllers.UserInfoController.getUserInfo
