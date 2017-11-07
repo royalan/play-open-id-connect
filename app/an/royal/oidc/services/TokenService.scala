@@ -10,18 +10,18 @@ import an.royal.oidc.OpenIDException
 import an.royal.oidc.constants.ErrorCodes
 import an.royal.oidc.repositories.{SecretKeyRepository, User, UserRepository}
 import io.jsonwebtoken.{Claims, Jwts, SignatureAlgorithm}
+import play.api.Configuration
 import play.api.cache.AsyncCacheApi
-import play.api.{Configuration, Logger}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 
 case class TokenPayload(
-                      clientID: String,
-                      userID: String,
-                      scopes: Set[String],
-                      redirectURI: String
-                      )
+                         clientID: String,
+                         userID: String,
+                         scopes: Set[String],
+                         redirectURI: String
+                       )
 
 @Singleton
 class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository: SecretKeyRepository, randomService: RandomService,
@@ -65,9 +65,7 @@ class TokenService @Inject()(userRepository: UserRepository, secretKeyRepository
   }
 
   def createGrantCode(payload: TokenPayload): Future[String] = {
-    val code = randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.sync.get)
-    Logger.debug(s"Got code: $code")
-    Source.single(code)
+    Source.single(randomService.newUniqueRandomValue(randomService.genNonUniqueRandomString, cache.sync.get))
       .mapAsync(1)(code => cache.set(code, payload, config.get[Duration]("openid.duration.grant-code")).map(_ => code))
       .runWith(Sink.head)
   }
