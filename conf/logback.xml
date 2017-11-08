@@ -12,10 +12,10 @@
 
   <!-- File output -->
   <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${log.dir:-/var/log/sun}/${appName}.log</file>
+    <file>${log.dir:-/var/log}/${appName}.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
       <!-- daily rollover -->
-      <fileNamePattern>${log.dir:-/var/log/sun}/${appName}.%d{yyyy-MM-dd}-%i.log.gz</fileNamePattern>
+      <fileNamePattern>${log.dir:-/var/log}/${appName}.%d{yyyy-MM-dd}-%i.log.gz</fileNamePattern>
       <!-- keep 60 days' worth of history -->
       <maxHistory>60</maxHistory>
       <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
