@@ -39,7 +39,7 @@ class LoginController @Inject()(userInfoAction: UserInfoAction, cache: SyncCache
               Cookie(TOKEN, Jwts.builder().signWith(SignatureAlgorithm.HS256, key).setSubject(userID).compact(), None))
         case None =>
           // FIXME consider about the password will return to view?
-          BadRequest(views.html.login(loginForm.fill(loginReq).withError("LOGIN_FAIL", "Login fail, please check your email or password")))
+          Unauthorized(views.html.login(loginForm.fill(loginReq).withError("LOGIN_FAIL", "Login fail, please check your email or password")))
       }
     }
 

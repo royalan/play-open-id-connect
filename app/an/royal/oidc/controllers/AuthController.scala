@@ -102,6 +102,7 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
                     Redirect(redirect_uri, qSet.toMap)
                 )
 
+            // FIXME if the scopes have been consent, should we prompt again?
             case OpenIDPrompt.CONSENT =>
               Logger.debug(s"Pre-request URI: ${req.uri}")
 
@@ -181,10 +182,8 @@ class AuthController @Inject()(userInfoAction: UserInfoAction, tokenRepository: 
       case OpenIDPrompt.CONSENT =>
         userID.map(_ => OpenIDPrompt.CONSENT).recover { case _: InvalidSessionException => throw OpenIDException(ErrorCodes.LOGIN_REQUIRED) }
 
-      // We did not let client force user to login.
-      // Instead, we show the information on consent page and make a sing in button if user want to change there account
       case OpenIDPrompt.LOGIN =>
-        userID.map(_ => OpenIDPrompt.CONSENT)
+        userID.flatMap(uid => checkConsentScopes(uid, validReq.clientID, validReq.scopes))
 
       // TODO implementation
       case OpenIDPrompt.SELECT_ACCOUNT => Future.failed(OpenIDException(ErrorCodes.INVALID_REQUEST_OBJECT))

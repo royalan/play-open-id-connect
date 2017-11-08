@@ -10,7 +10,7 @@ object HttpBaseResponse {
     Results.Status(status)(Json.toJson(ErrorResponse(ErrorDetail(errCode.id, message.getOrElse(errCode.toString)))))
   }
 
-  case class ErrorDetail(errNo: Int, message: String)
+  case class ErrorDetail(code: Int, message: String)
   case class ErrorResponse(error: ErrorDetail)
 
   implicit val errorDetailReads = Json.reads[ErrorDetail]

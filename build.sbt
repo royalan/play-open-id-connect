@@ -3,7 +3,7 @@ name := """play-open-id-connect"""
 version := "0.0.1"
 
 lazy val root = (project in file("."))
-  .enablePlugins(PlayScala, JavaAppPackaging, AshScriptPlugin)
+  .enablePlugins(PlayScala, AshScriptPlugin)
 
 TwirlKeys.templateImports += "an.royal.oidc.dtos._"
 
