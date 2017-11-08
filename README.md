@@ -48,7 +48,7 @@ docker exec -it pg-openid /bin/bash -c "psql -U postgres -c 'CREATE DATABASE ope
 
 Run and expose port *9000*
 ```bash
-docker run --name openid --rm -e JAVA_OPTS="-Dconfig.file=/tmp/prod.conf" -v ~/Documents/openid_conf:/tmp --net openid -p 9000:9000 royalan/play-open-id-connect
+docker run -itd --name openid --rm -e JAVA_OPTS="-Dconfig.file=/tmp/conf/prod.conf" -v ~/Documents/openid_conf:/tmp/conf --net openid -p 9000:9000 royalan/play-open-id-connect
 ```
 
 ### Try to generate code, token, id_token
