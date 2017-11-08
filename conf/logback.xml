@@ -1,41 +1,99 @@
-<!-- https://www.playframework.com/documentation/latest/SettingsLogger -->
-<configuration>
-
-  <conversionRule conversionWord="coloredLevel" converterClass="play.api.libs.logback.ColoredLevel" />
-
-  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>${application.home:-.}/logs/application.log</file>
-    <encoder>
-      <pattern>%date [%level] from %logger in %thread - %message%n%xException</pattern>
-    </encoder>
-  </appender>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<configuration status="WARN" monitorInterval="60">
+  <property name="appName" value="open-id-connect"/>
+  <property name="globalInfo" value="%d{MM/dd HH:mm:ss.SSS} %.-1level"/>
+  <property name="messageInfo" value="%-50logger{50} %msg%n"/>
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
-      <pattern>%coloredLevel %logger{15} - %message%n%xException{10}</pattern>
+      <pattern>%highlight(${globalInfo} ${messageInfo})</pattern>
     </encoder>
   </appender>
 
-  <appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
-    <appender-ref ref="FILE" />
+  <!-- File output -->
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${log.dir:-/var/log/sun}/${appName}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <!-- daily rollover -->
+      <fileNamePattern>${log.dir:-/var/log/sun}/${appName}.%d{yyyy-MM-dd}-%i.log.gz</fileNamePattern>
+      <!-- keep 60 days' worth of history -->
+      <maxHistory>60</maxHistory>
+      <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+        <maxFileSize>200MB</maxFileSize>
+      </timeBasedFileNamingAndTriggeringPolicy>
+    </rollingPolicy>
+    <encoder>
+      <pattern>${globalInfo} ${messageInfo}</pattern>
+    </encoder>
   </appender>
 
-  <appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
-    <appender-ref ref="STDOUT" />
+  <!--<appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">-->
+    <!--<destination>${logstash.host:-localhost}:${logstash.port:-5000}</destination>-->
+    <!--<reconnectionDelay>10 seconds</reconnectionDelay>-->
+    <!--&lt;!&ndash; encoder is required &ndash;&gt;-->
+    <!--<encoder class="net.logstash.logback.encoder.LogstashEncoder"/>-->
+  <!--</appender>-->
+
+  <!-- Faster than logback asynchronous in theory -->
+  <appender name="ASYNC_FILE" class="net.logstash.logback.appender.LoggingEventAsyncDisruptorAppender">
+    <waitStrategyType>sleeping</waitStrategyType>
+    <appender-ref ref="FILE"/>
   </appender>
 
-  <logger name="play" level="INFO" />
-  <logger name="application" level="DEBUG" />
+  <appender name="ASYNC_STDOUT" class="net.logstash.logback.appender.LoggingEventAsyncDisruptorAppender">
+    <appender-ref ref="STDOUT"/>
+  </appender>
 
-  <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
-  <logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF" />
-  <logger name="com.avaje.ebeaninternal.server.core.XmlConfigLoader" level="OFF" />
-  <logger name="com.avaje.ebeaninternal.server.lib.BackgroundThread" level="OFF" />
-  <logger name="com.gargoylesoftware.htmlunit.javascript" level="OFF" />
 
-  <root level="WARN">
-    <appender-ref ref="ASYNCFILE" />
-    <appender-ref ref="ASYNCSTDOUT" />
+  <root level="${log.root.level:-DEBUG}">
+    <appender-ref ref="ASYNC_STDOUT"/>
+    <appender-ref ref="ASYNC_FILE"/>
+    <!--<appender-ref ref="LOGSTASH"/>-->
   </root>
 
 </configuration>
+
+
+
+
+
+<!--<configuration>-->
+
+  <!--<conversionRule conversionWord="coloredLevel" converterClass="play.api.libs.logback.ColoredLevel" />-->
+
+  <!--<appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
+    <!--<file>${application.home:-.}/logs/application.log</file>-->
+    <!--<encoder>-->
+      <!--<pattern>%date [%level] from %logger in %thread - %message%n%xException</pattern>-->
+    <!--</encoder>-->
+  <!--</appender>-->
+
+  <!--<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">-->
+    <!--<encoder>-->
+      <!--<pattern>%coloredLevel %logger{15} - %message%n%xException{10}</pattern>-->
+    <!--</encoder>-->
+  <!--</appender>-->
+
+  <!--<appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">-->
+    <!--<appender-ref ref="FILE" />-->
+  <!--</appender>-->
+
+  <!--<appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">-->
+    <!--<appender-ref ref="STDOUT" />-->
+  <!--</appender>-->
+
+  <!--<logger name="play" level="INFO" />-->
+  <!--<logger name="application" level="DEBUG" />-->
+
+  <!--&lt;!&ndash; Off these ones as they are annoying, and anyway we manage configuration ourselves &ndash;&gt;-->
+  <!--<logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF" />-->
+  <!--<logger name="com.avaje.ebeaninternal.server.core.XmlConfigLoader" level="OFF" />-->
+  <!--<logger name="com.avaje.ebeaninternal.server.lib.BackgroundThread" level="OFF" />-->
+  <!--<logger name="com.gargoylesoftware.htmlunit.javascript" level="OFF" />-->
+
+  <!--<root level="WARN">-->
+    <!--<appender-ref ref="ASYNCFILE" />-->
+    <!--<appender-ref ref="ASYNCSTDOUT" />-->
+  <!--</root>-->
+
+<!--</configuration>-->

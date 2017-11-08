@@ -2,6 +2,10 @@
 # This file defines all application routes (Higher priority routes first)
 # ~~~~
 
+# Health check
+GET     /health/heartbeat           an.royal.oidc.controllers.HealthController.heartbeat
+GET     /health/status              an.royal.oidc.controllers.HealthController.status
+
 # authorization
 # http://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint
 GET     /oauth2/v1/auth             an.royal.oidc.controllers.AuthController.auth(client_id, response_type, scope, redirect_uri, nonce, state: Option[String], prompt: Option[String], display: Option[String])
